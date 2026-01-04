@@ -184,19 +184,16 @@ static int i_slot3[MAXPLAYERS+1];
 static int i_Current_Pap[MAXPLAYERS+1];
 static int LastHitTarget;
 static int Payday = 1;
-static int i_JackpotPunish = 1;
-static int i_CPS = 0;
 
 static bool CryoEasy[MAXPLAYERS+1];
 static bool MegaShot[2049] = { false, ... };
 
-#define CASINO_MAX_DOLLARS 100 //max regular cash that can be bypassed by jackpot or extra money roll
-#define CASINO_SALARY_GAIN_PER_HIT 1 //money gain by shooting
-#define CASINO_DAMAGE_GAIN_PER_HIT 0.25 //unused, used to give dmg based on amount of cash
-#define CASINO_MAX_DAMAGE 25.0 //max dmg based on cash, unused
-#define CAISNO_BUFF_DURATION 15.0 //buff duration
-#define CASINO_CASH_PER_USE 15 //cost of slots
-#define CASINO_TRUE_MAX_DOLLARS 1000 //max cash that cant be surpassed
+#define CASINO_MAX_DOLLARS 100
+#define CASINO_SALARY_GAIN_PER_HIT 1
+#define CASINO_DAMAGE_GAIN_PER_HIT 0.25
+#define CASINO_MAX_DAMAGE 25.0
+#define CAISNO_BUFF_DURATION 10.0
+#define CASINO_CASH_PER_USE 15
 
 
 public void Casino_MapStart() //idk what to precisely precache so hopefully this is good enough
@@ -208,7 +205,6 @@ public void Casino_MapStart() //idk what to precisely precache so hopefully this
 	Zero(i_MegaShot);
 	Zero(i_Ricochet);
 	Zero(Casino_hud_delay);
-	i_JackpotPunish = 1;
 	PrecacheSound("ambient/explosions/explode_3.wav");
 
 	//cooldowns//
@@ -359,7 +355,7 @@ public float Npc_OnTakeDamage_Casino(int victim, int &attacker, int &inflictor, 
 			i_ExplosiveProjectileHexArray[attacker] = 0;
 			LastHitTarget = victim;
 			
-			Explode_Logic_Custom(damage * 0.6, attacker, attacker, weapon, damagePosition, 250.0, _, _, false, 3);		
+			Explode_Logic_Custom(damage * 0.75, attacker, attacker, weapon, damagePosition, 250.0, _, _, false, 3);		
 			i_ExplosiveProjectileHexArray[attacker] = value;
 			LastHitTarget = 0;
 			i_Ricochet[attacker] -= 1;
@@ -558,7 +554,7 @@ public void CasinoWeaponHoldM2_Prethink(int client)
 		{
 			return;
 		}
-		f_AttackDelayKnife[client] = GetGameTime() + 0.2;
+		f_AttackDelayKnife[client] = GetGameTime() + 0.35;
 		int weapon_active = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
 		if(weapon_active < 0)
 		{
@@ -588,7 +584,6 @@ public void Weapon_Casino_M2(int client, int weapon)
 	{
 		case INVALID_HANDLE:
 		{
-			i_CPS = 0;
 			if (i_Dollars_Ammount[client] >= CASINO_CASH_PER_USE) //only go through if you can afford it
 			{
 				i_Dollars_Ammount[client] -= CASINO_CASH_PER_USE; //cost of slots
@@ -604,26 +599,7 @@ public void Weapon_Casino_M2(int client, int weapon)
 		}
 		default:
 		{
-			if (i_CPS > 32)
-			{
-				if (i_Dollars_Ammount[client] >= CASINO_CASH_PER_USE) //only go through if you can afford it
-				{
-					i_Dollars_Ammount[client] -= CASINO_CASH_PER_USE; //cost of slots
-					ROLL_THE_SLOTS(client, weapon);
-				}
-				else
-				{
-					ClientCommand(client, "playgamesound items/medshotno1.wav");
-					SetDefaultHudPosition(client);
-					SetGlobalTransTarget(client);
-				//	ShowSyncHudText(client,  SyncHud_Notifaction, "You're too poor!"); //lmao nerd
-				}
-			}
-			else
-			{
-				ROLL_THE_SLOTS(client, weapon);
-				i_CPS++;
-			}
+			ROLL_THE_SLOTS(client, weapon);
 		}
 	}
 }
@@ -973,11 +949,6 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				}
 			}
 			AmmoAdd = RoundToNearest(float(AmmoAdd) * 0.45);
-			if(i_CryoShot[client] > 150)
-			{
-				AmmoAdd /= 5;
-				i_Ricochet[client] += AmmoAdd;
-			}
 			i_CryoShot[client] += AmmoAdd;
 			switch(pap)
 			{
@@ -1014,7 +985,7 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				SetDefaultHudPosition(client);
 				SetGlobalTransTarget(client);
 				ShowSyncHudText(client,  SyncHud_Notifaction, "[Blood Ammo]!");
-				fl_ammo_cooldown[client] = GameTime + CAISNO_BUFF_DURATION*2;
+				fl_ammo_cooldown[client] = GameTime + CAISNO_BUFF_DURATION;
 
 				delete AmmoRefill_timer[client];
 				AmmoRefill_timer[client] = CreateTimer(CAISNO_BUFF_DURATION, AmmoRefillCasino, client);
@@ -1225,7 +1196,7 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 			if(fl_frenzy_cooldown[client] < GameTime)
 			{
 				delete Frenzy_timer[client];
-				Frenzy_timer[client] = CreateTimer(4.0, FrenzyCasino, client);
+				Frenzy_timer[client] = CreateTimer(3.5, FrenzyCasino, client);
 
 				fl_frenzy_cooldown[client] = GameTime + 5.0;
 				SetDefaultHudPosition(client);
@@ -1234,20 +1205,14 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				ClientCommand(client, "playgamesound ui/killsound_retro.wav");
 			}
 		}
-		case 14: //jackpot
+		case 14: //jackpot - needs to be re-purposed so that it paps to the next pap
 		{
-			if(i_JackpotPunish > 3)
-				i_JackpotPunish = 3;
-		
 			switch(pap)
 			{
 				case 0:
 				{
 					if(RoundFloat(Attributes_Get(weapon, 834, 0.0)) == 280)
-					{
-						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * (1000/i_JackpotPunish);
-						i_JackpotPunish++;
-					}
+						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * 1000;
 					else
 						Store_WeaponUpgradeByOnePap(client, weapon);
 						
@@ -1258,10 +1223,7 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				case 1:
 				{
 					if(RoundFloat(Attributes_Get(weapon, 834, 0.0)) == 280)
-					{
-						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * (1000/i_JackpotPunish);
-						i_JackpotPunish++;
-					}
+						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * 1000;
 					else
 						Store_WeaponUpgradeByOnePap(client, weapon);
 
@@ -1272,10 +1234,7 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				case 2:
 				{
 					if(RoundFloat(Attributes_Get(weapon, 834, 0.0)) == 280)
-					{
-						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * (1000/i_JackpotPunish);
-						i_JackpotPunish++;
-					}
+						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * 1000;
 					else
 						Store_WeaponUpgradeByOnePap(client, weapon);
 
@@ -1286,10 +1245,7 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				case 3:
 				{
 					if(RoundFloat(Attributes_Get(weapon, 834, 0.0)) == 280)
-					{
-						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * (1000/i_JackpotPunish);
-						i_JackpotPunish++;
-					}	
+						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * 1000;
 					else
 						Store_WeaponUpgradeByOnePap(client, weapon);
 
@@ -1311,19 +1267,14 @@ public void ROLL_THE_SLOTS(int client, int weapon)
 				case 4:
 				{
 					if(RoundFloat(Attributes_Get(weapon, 834, 0.0)) == 280)
-					{
-						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * (1000/i_JackpotPunish);
-						i_JackpotPunish++;
-					}
+						i_Dollars_Ammount[client] += CASINO_SALARY_GAIN_PER_HIT * 1000;
 					else
 						Store_WeaponUpgradeByOnePap(client, weapon);
 
 					SetDefaultHudPosition(client);
-					ShowSyncHudText(client,  SyncHud_Notifaction, "[|- JACKPOT 7/7/7 -|]\nSadly the casino banned you for cheating.\nSo you stole their money instead.");
+					ShowSyncHudText(client,  SyncHud_Notifaction, "[|- JACKPOT 7/7/7 -|]\nSadly the casino banned you for cheating.\nMoney returned.");
 					ClientCommand(client, "playgamesound ui/itemcrate_smash_ultrarare_short.wav");		
 				}
-
-
 			}
 		}
 		default: //womp womp
@@ -1343,26 +1294,12 @@ static void Casino_Show_Hud(int client)
 	{
 		case INVALID_HANDLE:
 		{
-			if(i_Dollars_Ammount[client] < 300)
-			{
-				PrintHintText(client,"----[%.1i/%.1i/%.1i]----\nDollars: [%.1i$/%.1i$]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_slot1[client],i_slot2[client],i_slot3[client], i_Dollars_Ammount[client],100 + (25 * (i_Current_Pap[client] + 1) * (Payday - 1)),i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
-			}
-			else
-				PrintHintText(client,"----[%.1i/%.1i/%.1i]----\nDollars: [Like, a lot of $]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_slot1[client],i_slot2[client],i_slot3[client], i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
+			PrintHintText(client,"----[%.1i/%.1i/%.1i]----\nDollars: [%.1i$/%.1i$]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_slot1[client],i_slot2[client],i_slot3[client], i_Dollars_Ammount[client],100 + (25 * (i_Current_Pap[client] + 1) * (Payday - 1)),i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
+			
 		}
 		default:
 		{
-			if(i_CPS > 32)
-			{
-				if(i_Dollars_Ammount[client] < 300)
-				{
-					PrintHintText(client,"----[%.1i/%.1i/%.1i]----\nDollars: [%.1i$/%.1i$]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_slot1[client],i_slot2[client],i_slot3[client], i_Dollars_Ammount[client],100 + (25 * (i_Current_Pap[client] + 1) * (Payday - 1)),i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
-				}
-				else
-					PrintHintText(client,"----[%.1i/%.1i/%.1i]----\nDollars: [Like, a lot of $]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_slot1[client],i_slot2[client],i_slot3[client], i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
-			}
-			else
-				PrintHintText(client,"----[FRENZY ACTIVE]----\nDollars: [SPAM / M2]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
+			PrintHintText(client,"----[FRENZY ACTIVE]----\nDollars: [SPAM / M2]\nSpecial Bullets: [%.1i R.|%.1i T.B.O.|%.1i C.]",i_Ricochet[client],i_MegaShot[client],i_CryoShot[client]);
 		}
 	}
 }
@@ -1424,10 +1361,6 @@ public void Casino_Cooldown_Logic(int client, int weapon)
 		{
 			Casino_Show_Hud(client);
 			i_Current_Pap[client] = Casino_Get_Pap(weapon);
-			if(i_Dollars_Ammount[client] > CASINO_TRUE_MAX_DOLLARS)
-			{
-				i_Dollars_Ammount[client] = CASINO_TRUE_MAX_DOLLARS;
-			}
 		}
 		Casino_hud_delay[client] = GetGameTime() + 0.5;
 	}
